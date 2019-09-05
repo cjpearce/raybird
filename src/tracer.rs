@@ -3,6 +3,10 @@ use crate::scene::{Scene, Intersection};
 use nalgebra::Point2;
 use nalgebra::Vector3;
 
+pub trait Screen {
+    fn write(&mut self, i: usize, r: u8, g: u8, b: u8);
+}
+
 #[derive(Clone)]
 struct PixelInfo {
     color: Vector3<f64>,
@@ -61,17 +65,15 @@ impl Tracer {
         }
     }
 
-    pub fn update(&mut self, pixels: &mut [u8]) {
+    pub fn update(&mut self, screen: &mut impl Screen) {
         let pixel = self.pixel_for_index(self.index);
         self.expose(pixel);
 
         let color = self.exposures.color_at(pixel.x + pixel.y * self.width);
 
         let index = (pixel.x + pixel.y * self.width) * 4;
-        pixels[index] = color.x;
-        pixels[index + 1] = color.y;
-        pixels[index + 2] = color.z;
-        pixels[index + 3] = 255;
+        
+        screen.write(index, color.x, color.y, color.z);
 
         self.index += 1;
     }
