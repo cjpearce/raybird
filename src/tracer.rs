@@ -1,7 +1,7 @@
 use crate::ray::{Ray, DirectionExt};
 use crate::scene::{Scene, Intersection};
 use nalgebra::Point2;
-use nalgebra::Vector3;
+pub use nalgebra::Vector3;
 
 pub trait Screen {
     fn write(&mut self, i: usize, r: u8, g: u8, b: u8);
@@ -23,10 +23,10 @@ impl PixelInfo {
     }
 }
 
-struct Exposures(Vec<PixelInfo>, f64);
+pub struct Exposures(Vec<PixelInfo>, f64);
 
 impl Exposures {
-    fn new(length: usize, reciprocal_gamma: f64) -> Self {
+    pub fn new(length: usize, reciprocal_gamma: f64) -> Self {
         let default = PixelInfo {
             color: Vector3::new(0.0, 0.0, 0.0),
             exposures: 0
@@ -34,18 +34,17 @@ impl Exposures {
         Self(vec![default; length], reciprocal_gamma)
     }
 
-    fn add_sample(&mut self, position: usize, sample: Vector3<f64>) {
+    pub fn add_sample(&mut self, position: usize, sample: Vector3<f64>) {
         self.0[position].color += sample;
         self.0[position].exposures += 1;
     }
 
-    fn color_at(&self, position: usize) -> Vector3<u8> {
+    pub fn color_at(&self, position: usize) -> Vector3<u8> {
         self.0[position].color(self.1)
     }
 }
 
 pub struct Tracer {
-    scene: Scene,
     bounces: u32,
     width: usize,
     height: usize,
@@ -54,9 +53,8 @@ pub struct Tracer {
 }
 
 impl Tracer {
-    pub fn new(scene: Scene, bounces: u32, gamma: f64, width: usize, height: usize) -> Tracer {
+    pub fn new(bounces: u32, gamma: f64, width: usize, height: usize) -> Tracer {
         Tracer {
-            scene,
             bounces,
             width,
             height,
@@ -65,61 +63,66 @@ impl Tracer {
         }
     }
 
-    pub fn update(&mut self, screen: &mut impl Screen) {
+    pub fn update(&mut self, scene: &Scene, screen: &mut impl Screen) {
         let pixel = self.pixel_for_index(self.index);
-        self.expose(pixel);
+        
+        let sample = self.expose(scene, pixel);
+
+        let index = pixel.x + pixel.y * self.width;
+        self.exposures.add_sample(index, sample);
 
         let color = self.exposures.color_at(pixel.x + pixel.y * self.width);
-
-        let index = (pixel.x + pixel.y * self.width) * 4;
         
         screen.write(index, color.x, color.y, color.z);
 
         self.index += 1;
     }
 
-    fn pixel_for_index(&self, index: usize) -> Point2<usize> {
+    pub fn pixel_for_index(&self, index: usize) -> Point2<usize> {
         let wrapped = index % (self.width * self.height);
         Point2::new(wrapped % self.width, wrapped / self.width)
     }
 
-    fn expose(&mut self, pixel: Point2<usize>) {
-        let rgba_index = pixel.x + pixel.y * self.width;
-        let ray = self
-            .scene
+    pub fn expose(&self, scene: &Scene, pixel: Point2<usize>) -> Vector3<f64> {
+        let ray = scene
             .camera
             .ray(pixel.x, pixel.y, self.width, self.height);
-        let sample = self.trace(ray, 1);
-        self.exposures.add_sample(rgba_index as usize, sample);
+        self.trace(scene, ray, 16)
     }
 
-    fn trace(&mut self, mut ray: Ray, samples: u32) -> Vector3<f64> {
+    fn trace(&self, scene: &Scene, ray: Ray, samples: u32) -> Vector3<f64> {
         let mut total_energy = Vector3::new(0.0, 0.0, 0.0);
         let n = f64::from(samples).sqrt() as u32;
         for u in 0..n {
             for v in 0..n {
+                let mut ray = ray;
                 let mut energy = Vector3::new(0.0, 0.0, 0.0);
                 let mut signal = Vector3::new(1.0, 1.0, 1.0);
 
                 for bounce in 0..self.bounces {
-                    let (fu, fv) = if bounce == 0 {
-                        ((f64::from(u) + rand::random::<f64>()) / f64::from(n),
-                        (f64::from(v) + rand::random::<f64>()) / f64::from(n))
-                    } else {
-                        (rand::random::<f64>(), rand::random::<f64>())
-                    };
+                    let stratisfied_count = if bounce == 0 { n } else { 1 };
+                    let fu = (f64::from(u) + rand::random::<f64>()) / f64::from(stratisfied_count);
+                    let fv = (f64::from(v) + rand::random::<f64>()) / f64::from(stratisfied_count);
             
-                    if let Some(intersect) = self.scene.intersect(&ray) {
+                    if let Some(intersect) = scene.intersect(&ray) {
                         let sample = intersect
                             .material
-                            .bsdf(&intersect.normal, &ray.direction, intersect.distance, fu, fv, &self.scene, &intersect);
+                            .bsdf(
+                                &intersect.normal,
+                                &ray.direction,
+                                intersect.distance,
+                                fu,
+                                fv,
+                                &scene,
+                                &intersect
+                            );
 
                         ray.origin = intersect.hit;
                         ray.direction = sample.direction;
                         energy += intersect.material.emit().component_mul(&signal);
                         signal = signal.component_mul(&sample.signal);
                     } else {
-                        energy += self.scene.bg(&ray).component_mul(&signal);
+                        energy += scene.bg(&ray).component_mul(&signal);
                         break;
                     }
                 }
