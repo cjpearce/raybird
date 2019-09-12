@@ -1,136 +1,137 @@
-use crate::ray::{Ray, DirectionExt};
-use crate::scene::{Scene, Intersection};
-use nalgebra::Point2;
+use crate::ray::{Ray};
+use crate::scene::{Scene};
+use crate::sensor::{SensorDimensions, Sensor};
+use crate::material::{SurfaceInteraction, SurfacePoint};
 pub use nalgebra::Vector3;
 
 pub trait Screen {
     fn write(&mut self, i: usize, r: u8, g: u8, b: u8);
 }
 
-#[derive(Clone)]
-struct PixelInfo {
-    color: Vector3<f64>,
-    exposures: u32,
-}
-
-impl PixelInfo {
-    fn color(&self, reciprocal_gamma: f64) -> Vector3<u8> {
-        let color = self.color * (1.0 / f64::from(self.exposures));
-        let color = (color / 255.0)
-            .apply_into(|v| v.powf(reciprocal_gamma).min(1.0))
-            * 255.0;
-        Vector3::new(color.x as u8, color.y as u8, color.z as u8)
-    }
-}
-
-pub struct Exposures(Vec<PixelInfo>, f64);
-
-impl Exposures {
-    pub fn new(length: usize, reciprocal_gamma: f64) -> Self {
-        let default = PixelInfo {
-            color: Vector3::new(0.0, 0.0, 0.0),
-            exposures: 0
-        };
-        Self(vec![default; length], reciprocal_gamma)
-    }
-
-    pub fn add_sample(&mut self, position: usize, sample: Vector3<f64>) {
-        self.0[position].color += sample;
-        self.0[position].exposures += 1;
-    }
-
-    pub fn color_at(&self, position: usize) -> Vector3<u8> {
-        self.0[position].color(self.1)
-    }
-}
-
-pub struct Tracer {
+pub struct SingleThreadedTracer {
     bounces: u32,
-    width: usize,
-    height: usize,
-    exposures: Exposures,
-    index: usize
+    dimensions: SensorDimensions,
+    sensor: Sensor,
+    sample_count: usize
 }
 
-impl Tracer {
-    pub fn new(bounces: u32, gamma: f64, width: usize, height: usize) -> Tracer {
-        Tracer {
+impl SingleThreadedTracer {
+    pub fn new(bounces: u32, gamma: f64, width: usize, height: usize) -> Self {
+        let dimensions = SensorDimensions{width, height};
+        Self {
             bounces,
-            width,
-            height,
-            exposures: Exposures::new(width*height, 1.0/gamma),
-            index: 0
+            dimensions,
+            sensor: Sensor::new(dimensions, 1.0/gamma),
+            sample_count: 0
         }
     }
 
     pub fn update(&mut self, scene: &Scene, screen: &mut impl Screen) {
-        let pixel = self.pixel_for_index(self.index);
+        let pixel = self.dimensions.pixel_for_index(self.sample_count);
         
-        let sample = self.expose(scene, pixel);
+        let ray = scene.camera.ray(
+            pixel.x,
+            pixel.y,
+            self.dimensions.width,
+            self.dimensions.height
+        );
 
-        let index = pixel.x + pixel.y * self.width;
-        self.exposures.add_sample(index, sample);
+        let sample = StratisfiedImageSampler::new(
+            scene,
+            ray,
+            1,
+            self.bounces as usize
+        ).next().unwrap();
 
-        let color = self.exposures.color_at(pixel.x + pixel.y * self.width);
-        
+        let index = self.dimensions.index_for_pixel(pixel);
+        self.sensor.add_sample(index, sample);
+        let color = self.sensor.color_at(index);
         screen.write(index, color.x, color.y, color.z);
 
-        self.index += 1;
+        self.sample_count += 1;
     }
+}
 
-    pub fn pixel_for_index(&self, index: usize) -> Point2<usize> {
-        let wrapped = index % (self.width * self.height);
-        Point2::new(wrapped % self.width, wrapped / self.width)
+pub struct StratisfiedImageSampler<'a> {
+    scene: &'a Scene,
+    ray: Ray,
+    samples: u32,
+    bounces: usize
+}
+
+impl<'a> StratisfiedImageSampler<'a> {
+    pub fn new(scene: &'a Scene, ray: Ray, samples: u32, bounces: usize) -> Self {
+        Self{scene, ray, samples, bounces}
     }
+}
 
-    pub fn expose(&self, scene: &Scene, pixel: Point2<usize>) -> Vector3<f64> {
-        let ray = scene
-            .camera
-            .ray(pixel.x, pixel.y, self.width, self.height);
-        self.trace(scene, ray, 16)
-    }
+impl<'a> Iterator for StratisfiedImageSampler<'a> {
+    type Item=Vector3<f64>;
 
-    fn trace(&self, scene: &Scene, ray: Ray, samples: u32) -> Vector3<f64> {
+    fn next(&mut self) -> Option<Vector3<f64>> {
         let mut total_energy = Vector3::new(0.0, 0.0, 0.0);
-        let n = f64::from(samples).sqrt() as u32;
+        let n = f64::from(self.samples).sqrt() as u32;
         for u in 0..n {
             for v in 0..n {
-                let mut ray = ray;
-                let mut energy = Vector3::new(0.0, 0.0, 0.0);
-                let mut signal = Vector3::new(1.0, 1.0, 1.0);
-
-                for bounce in 0..self.bounces {
-                    let stratisfied_count = if bounce == 0 { n } else { 1 };
-                    let fu = (f64::from(u) + rand::random::<f64>()) / f64::from(stratisfied_count);
-                    let fv = (f64::from(v) + rand::random::<f64>()) / f64::from(stratisfied_count);
-            
-                    if let Some(intersect) = scene.intersect(&ray) {
-                        let sample = intersect
-                            .material
-                            .bsdf(
-                                &intersect.normal,
-                                &ray.direction,
-                                intersect.distance,
-                                fu,
-                                fv,
-                                &scene,
-                                &intersect
-                            );
-
-                        ray.origin = intersect.hit;
-                        ray.direction = sample.direction;
-                        energy += intersect.material.emit().component_mul(&signal);
-                        signal = signal.component_mul(&sample.signal);
-                    } else {
-                        energy += scene.bg(&ray).component_mul(&signal);
-                        break;
-                    }
-                }
-
-                total_energy += energy;
+                let fu = (f64::from(u) + rand::random::<f64>()) / f64::from(n);
+                let fv = (f64::from(v) + rand::random::<f64>()) / f64::from(n);
+                total_energy += LightPath::new(&self.scene, self.ray, (fu, fv)).take(self.bounces).sum::<Vector3<f64>>();
             }
         }
 
-        total_energy / f64::from(n*n)
+        Some(total_energy / f64::from(n*n))
+    }
+}
+
+struct LightPath<'a> {
+    scene: &'a Scene,
+    ray: Ray,
+    signal: Vector3<f64>,
+    uv: (f64, f64)
+}
+
+impl<'a> LightPath<'a> {
+    fn new(scene: &'a Scene, ray: Ray, first_uv: (f64, f64)) -> Self {
+        Self{scene, ray, signal: Vector3::new(1.0, 1.0, 1.0), uv: first_uv}
+    }
+}
+
+impl<'a> Iterator for LightPath<'a> {
+    type Item=Vector3<f64>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.signal == Vector3::zeros() {
+            return None;
+        }
+
+        if let Some(intersect) = self.scene.intersect(&self.ray) {
+            let interaction = SurfaceInteraction{
+                wo: -self.ray.direction,
+                surface: SurfacePoint{
+                    p: intersect.hit,
+                    n: intersect.normal
+                }
+            };
+
+            let sample = intersect
+                .material
+                .bsdf(
+                    &self.scene,
+                    interaction,
+                    intersect.distance,
+                    self.uv.0,
+                    self.uv.1,
+                );
+            self.uv = (rand::random(), rand::random());
+
+            let contribution = intersect.material.emit().component_mul(&self.signal);
+            self.ray = Ray{origin: intersect.hit, direction: sample.direction};
+            self.signal = self.signal.component_mul(&sample.signal);
+            Some(contribution)
+        } else {
+            let contribution = self.scene.bg(&self.ray).component_mul(&self.signal);
+            self.signal = Vector3::zeros();
+            Some(contribution)
+        }
     }
 }

@@ -4,15 +4,14 @@ extern crate criterion;
 use criterion::Criterion;
 use criterion::black_box;
 
-use canvas::tracer::Tracer;
-use canvas::scene_loader;
+use raybird::tracer::{Tracer};
+use raybird::scene_loader;
 
 fn trace_scene(n: u64) {
     let width = 400;
     let height = 400;
     let scene = scene_loader::load_scene("box").unwrap();
     let mut tracer = Tracer::new(
-        scene,
         10,
         2.2,
         width,
@@ -22,7 +21,7 @@ fn trace_scene(n: u64) {
     let mut data = vec![0u8; width * height * 4];
 
     for _ in 0..n {
-        tracer.update(&mut data);
+        tracer.update(&scene, &mut data);
     }
 }
 

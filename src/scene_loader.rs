@@ -86,12 +86,12 @@ fn load_spheres_scene() -> Scene {
 
     let green_glass = Material::new(
         Vector3::new(0.0, 1.0, 0.0),
-        1.52,
+        1.2,
         0.95,
         Vector3::new(0.0, 0.0, 0.0),
-        Vector3::new(0.05, 0.05, 0.05),
+        Vector3::new(0.04, 0.04, 0.04),
         0.0,
-        1.0
+        0.0
     );
 
     let objects = vec![

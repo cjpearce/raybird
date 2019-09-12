@@ -6,9 +6,7 @@ use std::f64;
 pub struct Camera {
     position: Point3<f64>,
     sensor: f64,
-    focal_length: f64,
     object_distance: f64,
-    fstop: f64,
     aperture: f64,
     image_distance: f64,
     vertical_angle: f64,
@@ -26,15 +24,13 @@ impl Camera {
         vertical_angle: f64,
     ) -> Self {
         Self {
-            position: position,
-            sensor: sensor,
-            focal_length: focal_length,
+            position,
+            sensor,
             object_distance: -focus,
-            fstop: fstop,
             aperture: focal_length / fstop,
             image_distance: 1.0 / (1.0 / focal_length - 1.0 / -focus),
-            vertical_angle: vertical_angle,
-            horizontal_angle: horizontal_angle,
+            vertical_angle,
+            horizontal_angle,
         }
     }
 

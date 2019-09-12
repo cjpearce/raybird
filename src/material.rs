@@ -5,6 +5,17 @@ use crate::onb::{OrthonormalBasis};
 use rand;
 use std::f64;
 
+#[derive(Copy, Clone)]
+pub struct SurfacePoint {
+    pub n: Vector3<f64>,
+    pub p: Point3<f64>,
+}
+
+#[derive(Copy, Clone)]
+pub struct SurfaceInteraction {
+    pub wo: Vector3<f64>,
+    pub surface: SurfacePoint
+}
 
 pub struct BSDF {
     pub direction: Vector3<f64>,
@@ -49,27 +60,28 @@ impl Material {
 
     pub fn bsdf(
         &self,
-        normal: &Vector3<f64>,
-        direction: &Vector3<f64>,
+        scene: &Scene,
+        interaction: SurfaceInteraction,
         length: f64,
         u: f64,
-        v: f64,
-        scene: &Scene,
-        intersect: &Intersection
+        v: f64
     ) -> BSDF {
-        let entering = direction.dot(&normal) < 0f64;
-        if entering {
+        if interaction.wo.dot(&interaction.surface.n) > 0f64 {
             let mut test = FilteredProbabilityTest::new();
-            if test.or(self.schilck(&normal, &direction).component_average()) {
-                self.reflected(*direction, &normal, u, v)
+            if test.or(self.schilck(&interaction).component_average()) {
+                self.reflected(&interaction, u, v)
             } else if test.or(self.transparency) {
-                self.refracted_entry(*direction, &normal)
+                self.refracted_entry(&interaction)
             } else if test.or(self.metal) {
                 self.dead()
             } else {
-                self.diffused(&normal, u, v, scene, intersect)
+                self.diffused(scene, &interaction, u, v)
             }
-        } else if let Some(exited) = direction.refraction(&-normal, self.refraction, 1.0) {
+        } else if let Some(exited) = (-interaction.wo).refraction(
+                &-interaction.surface.n,
+                self.refraction,
+                1.0
+        ) {
             self.refracted_exit(exited, length)
         } else {
             self.dead()
@@ -83,16 +95,19 @@ impl Material {
         }
     }
 
-    fn schilck(&self, incident: &Vector3<f64>, normal: &Vector3<f64>) -> Vector3<f64> {
-        let cos_incident = (-incident).dot(&normal);
+    fn schilck(&self, interaction: &SurfaceInteraction) -> Vector3<f64> {
+        let cos_incident = interaction.wo.dot(&interaction.surface.n);
         self.frensel + ((Vector3::new(1.0, 1.0, 1.0) - self.frensel) * (1.0 - cos_incident).powf(5.0))
     }
 
-    fn diffused(&self, normal: &Vector3<f64>, u: f64, v: f64, scene: &Scene,
-        intersect: &Intersection) -> BSDF {
-        let a = CosWeightedDiffuse::new(*normal, u, v);
-        let b = LightWeightedDiffuse::new(intersect.hit, *normal, scene);
-        let mix = MixturePdf::new(1.0, &a, &b);
+    fn diffused(&self, scene: &Scene, interaction: &SurfaceInteraction, u: f64, v: f64, ) -> BSDF {
+        let a = CosWeightedDiffuse::new(interaction.surface.n, u, v);
+        let b = LightWeightedDiffuse::new(
+            interaction.surface.p,
+            interaction.surface.n,
+            scene
+        );
+        let mix = MixturePdf::new(0.5, &a, &b);
         let direction = mix.gen();
         BSDF {
             direction,
@@ -100,19 +115,29 @@ impl Material {
         }
     }
 
-    fn reflected(&self, mut direction: Vector3<f64>, normal: &Vector3<f64>, u: f64, v: f64) -> BSDF {
-        Reflection::new(Unit::new_normalize(*normal), 0.0)
-            .reflect(&mut direction);
+    fn reflected(&self, interaction: &SurfaceInteraction, u: f64, v: f64) -> BSDF {
+        let mut reflected = -interaction.wo;
+        Reflection::new(Unit::new_normalize(interaction.surface.n), 0.0)
+            .reflect(&mut reflected);
 
         BSDF{
-            direction: Vector3::random_in_cone(&direction, 1.0 - self.gloss, u, v),
+            direction: Vector3::random_in_cone(
+                &reflected,
+                1.0 - self.gloss,
+                u,
+                v
+            ),
             signal: Vector3::new(1.0, 1.0, 1.0).lerp(&self.frensel, self.metal)
         }
     }
 
-    fn refracted_entry(&self, direction: Vector3<f64>, normal: &Vector3<f64>) -> BSDF {
+    fn refracted_entry(&self, interaction: &SurfaceInteraction) -> BSDF {
         BSDF{
-            direction: direction.refraction(normal, 1.0, self.refraction).unwrap(),
+            direction: (-interaction.wo).refraction(
+                &interaction.surface.n,
+                1.0,
+                self.refraction
+            ).unwrap(),
             signal: Vector3::new(1.0, 1.0, 1.0)
         }
     }
