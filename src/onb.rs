@@ -1,4 +1,4 @@
-use nalgebra::{Vector3};
+use nalgebra::Vector3;
 pub struct OrthonormalBasis(Vector3<f64>, Vector3<f64>, Vector3<f64>);
 
 // TODO: Impl the from trait?
@@ -17,10 +17,16 @@ impl OrthonormalBasis {
         Self(u, v, w)
     }
 
-    fn u(&self) -> Vector3<f64> { self.0 }
-    fn v(&self) -> Vector3<f64> { self.1 }
-    fn w(&self) -> Vector3<f64> { self.2 }
-    
+    fn u(&self) -> Vector3<f64> {
+        self.0
+    }
+    fn v(&self) -> Vector3<f64> {
+        self.1
+    }
+    fn w(&self) -> Vector3<f64> {
+        self.2
+    }
+
     pub fn local(&self, a: Vector3<f64>) -> Vector3<f64> {
         a.x * self.u() + a.y * self.v() + a.z * self.w()
     }

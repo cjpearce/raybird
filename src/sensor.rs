@@ -1,4 +1,4 @@
-pub use nalgebra::{Vector3, Point2};
+pub use nalgebra::{Point2, Vector3};
 
 #[derive(Copy, Clone)]
 pub struct SensorDimensions {
@@ -26,27 +26,25 @@ struct PixelInfo {
 impl PixelInfo {
     fn color(&self, reciprocal_gamma: f64) -> Vector3<u8> {
         let color = self.color * (1.0 / f64::from(self.sensor));
-        let color = (color / 255.0)
-            .apply_into(|v| v.powf(reciprocal_gamma).min(1.0))
-            * 255.0;
+        let color = (color / 255.0).apply_into(|v| v.powf(reciprocal_gamma).min(1.0)) * 255.0;
         Vector3::new(color.x as u8, color.y as u8, color.z as u8)
     }
 }
 
-pub struct Sensor{
+pub struct Sensor {
     pixels: Vec<PixelInfo>,
-    reciprocal_gamma: f64
+    reciprocal_gamma: f64,
 }
 
 impl Sensor {
     pub fn new(dimensions: SensorDimensions, reciprocal_gamma: f64) -> Self {
         let default = PixelInfo {
             color: Vector3::new(0.0, 0.0, 0.0),
-            sensor: 0
+            sensor: 0,
         };
-        Self{
+        Self {
             pixels: vec![default; dimensions.width * dimensions.height],
-            reciprocal_gamma
+            reciprocal_gamma,
         }
     }
 

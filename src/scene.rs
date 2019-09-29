@@ -21,33 +21,40 @@ struct Hit<'a> {
 pub struct Scene {
     pub camera: Camera,
     objects: Vec<Sphere>,
-    light: usize
+    light: usize,
 }
 
 impl Scene {
     pub fn new(objects: Vec<Sphere>, camera: Camera, light: usize) -> Scene {
-        Scene { objects, camera, light }
+        Scene {
+            objects,
+            camera,
+            light,
+        }
     }
 
     pub fn intersect(&self, ray: &Ray) -> Option<Intersection> {
-        self.objects.iter().fold(None, |closest, object| {
-            let distance = object.intersection_distance(ray);
-            match closest {
-                None => Some(Hit{object, distance}),
-                Some(ref hit) if distance < hit.distance => Some(Hit{object, distance}),
-                c => c
-            }
-        }).map(|hit| {
-            let point = ray.origin + (ray.direction * hit.distance);
-            let normal = (point - hit.object.center()).normalize();
-            Intersection {
-                hit: point,
-                normal,
-                material: hit.object.material(),
-                distance: hit.distance,
-                object: hit.object
-            }
-        })
+        self.objects
+            .iter()
+            .fold(None, |closest, object| {
+                let distance = object.intersection_distance(ray);
+                match closest {
+                    None => Some(Hit { object, distance }),
+                    Some(ref hit) if distance < hit.distance => Some(Hit { object, distance }),
+                    c => c,
+                }
+            })
+            .map(|hit| {
+                let point = ray.origin + (ray.direction * hit.distance);
+                let normal = (point - hit.object.center()).normalize();
+                Intersection {
+                    hit: point,
+                    normal,
+                    material: hit.object.material(),
+                    distance: hit.distance,
+                    object: hit.object,
+                }
+            })
     }
 
     pub fn bg(&self, ray: &Ray) -> Vector3<f64> {
@@ -81,14 +88,14 @@ mod test {
         );
 
         let objects = vec![
-            Sphere::new(Point3::new(-1005.0, 0.0, -8.0), 1000.0, blue_plastic),
-            Sphere::new(Point3::new(1005.0, 0.0, -8.0), 1000.0, blue_plastic),
-            Sphere::new(Point3::new(0.0, -1003.0, -8.0), 1000.0, blue_plastic),
-            Sphere::new(Point3::new(0.0, 1003.0, -8.0), 1000.0, blue_plastic),
-            Sphere::new(Point3::new(0.0, 0.0, -1010.0), 1000.0, blue_plastic),
-            Sphere::new(Point3::new(0.0, 13.0, -8.0), 10.5, blue_plastic),
-            Sphere::new(Point3::new(1.0, -2.0, -7.0), 1.0, blue_plastic),
-            Sphere::new(Point3::new(-0.75, -2.0, -5.0), 1.0, blue_plastic),
+            Sphere::new(0, Point3::new(-1005.0, 0.0, -8.0), 1000.0, blue_plastic),
+            Sphere::new(1, Point3::new(1005.0, 0.0, -8.0), 1000.0, blue_plastic),
+            Sphere::new(2, Point3::new(0.0, -1003.0, -8.0), 1000.0, blue_plastic),
+            Sphere::new(3, Point3::new(0.0, 1003.0, -8.0), 1000.0, blue_plastic),
+            Sphere::new(4, Point3::new(0.0, 0.0, -1010.0), 1000.0, blue_plastic),
+            Sphere::new(5, Point3::new(0.0, 13.0, -8.0), 10.5, blue_plastic),
+            Sphere::new(6, Point3::new(1.0, -2.0, -7.0), 1.0, blue_plastic),
+            Sphere::new(7, Point3::new(-0.75, -2.0, -5.0), 1.0, blue_plastic),
         ];
 
         let camera = Camera::new(
@@ -101,7 +108,7 @@ mod test {
             0.0,
         );
 
-        let scene = Scene::new(objects, camera);
+        let scene = Scene::new(objects, camera, 7);
         let ray = Ray {
             origin: Point3::new(0.0, 0.0, 7.0),
             direction: Vector3::new(-0.13133105101029943, 0.23858981742286559, -0.96219907195063),

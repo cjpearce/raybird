@@ -1,9 +1,10 @@
+mod bxdf;
 mod camera;
 mod material;
+mod onb;
 mod ray;
 mod scene;
+pub mod scene_loader;
 pub mod sensor;
 mod sphere;
-mod onb;
-pub mod scene_loader;
 pub mod tracer;

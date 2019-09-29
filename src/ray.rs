@@ -1,11 +1,10 @@
 use nalgebra::{Point3, Vector3};
 use std::f64;
-use crate::onb::OrthonormalBasis;
 
 #[derive(Copy, Clone)]
 pub struct Ray {
     pub origin: Point3<f64>,
-    pub direction: Vector3<f64>
+    pub direction: Vector3<f64>,
 }
 
 pub trait DirectionExt {
@@ -40,7 +39,7 @@ impl DirectionExt for Vector3<f64> {
         Vector3::new(
             phi.cos() * 2.0 * v.sqrt(),
             phi.sin() * 2.0 * v.sqrt(),
-            (1.0 - v).sqrt()
+            (1.0 - v).sqrt(),
         )
     }
 

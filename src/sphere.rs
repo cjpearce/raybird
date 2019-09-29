@@ -3,7 +3,6 @@ use crate::ray::Ray;
 use nalgebra::Point3;
 use std::f64;
 
-
 #[derive(Copy, Clone)]
 pub struct Sphere {
     index: usize,
