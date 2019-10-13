@@ -62,7 +62,7 @@ fn load_sphere_grid() -> Scene {
         0.0
     );
 
-    Scene::new(objects, camera, 25)
+    Scene::new(objects, camera)
 }
 
 
@@ -166,7 +166,7 @@ fn load_spheres_scene() -> Scene {
         25.0
     );
 
-    Scene::new(objects, camera, 5)
+    Scene::new(objects, camera)
 }
 
 fn load_box_scene() -> Scene {
@@ -251,5 +251,5 @@ fn load_box_scene() -> Scene {
         0.0
     );
 
-    Scene::new(objects, camera, 5)
+    Scene::new(objects, camera)
 }

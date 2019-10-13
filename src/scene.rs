@@ -21,12 +21,24 @@ struct Hit<'a> {
 pub struct Scene {
     pub camera: Camera,
     objects: Vec<Sphere>,
-    light: usize
+    lights: Vec<usize>
 }
 
 impl Scene {
-    pub fn new(objects: Vec<Sphere>, camera: Camera, light: usize) -> Scene {
-        Scene { objects, camera, light }
+    pub fn new(objects: Vec<Sphere>, camera: Camera) -> Scene {
+        let lights = objects.iter().enumerate().filter(|(i, object)| {
+            object.material().can_emit()
+        }).map(|(i, _)| i).collect::<Vec<_>>();
+
+        Scene { objects, camera, lights }
+    }
+
+    pub fn add_object(&mut self, object: Sphere, is_light: bool) {
+        if is_light {
+            self.lights.push(self.objects.len());
+        }
+
+        self.objects.push(object);
     }
 
     pub fn intersect(&self, ray: &Ray) -> Option<Intersection> {
@@ -54,8 +66,10 @@ impl Scene {
         Vector3::new(1.0, 0.0, 0.0)
     }
 
-    pub fn light(&self) -> Sphere {
-        self.objects[self.light]
+    pub fn lights(&self) -> Vec<Sphere> {
+        self.lights.iter().map(|i| {
+            self.objects[*i]
+        }).collect::<Vec<_>>()
     }
 }
 

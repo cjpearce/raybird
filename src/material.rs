@@ -2,7 +2,9 @@ use nalgebra::{geometry::Reflection, Unit, Vector3, Point3};
 use crate::ray::{DirectionExt, Ray};
 use crate::scene::{Scene, Intersection};
 use crate::onb::{OrthonormalBasis};
+use crate::sphere::{Sphere};
 use rand;
+use rand::seq::SliceRandom;
 use std::f64;
 
 #[derive(Copy, Clone)]
@@ -54,6 +56,10 @@ impl Material {
         }
     }
 
+    pub fn can_emit(&self) -> bool {
+        self.light.norm() > 0.0
+    }
+
     pub fn emit(&self) -> Vector3<f64> {
         self.light
     }
@@ -67,6 +73,7 @@ impl Material {
         v: f64
     ) -> BSDF {
         if interaction.wo.dot(&interaction.surface.n) > 0f64 {
+            // brdf
             let mut test = FilteredProbabilityTest::new();
             if test.or(self.schilck(&interaction).component_average()) {
                 self.reflected(&interaction, u, v)
@@ -82,6 +89,7 @@ impl Material {
                 self.refraction,
                 1.0
         ) {
+            // btdf
             self.refracted_exit(exited, length)
         } else {
             self.dead()
@@ -101,13 +109,23 @@ impl Material {
     }
 
     fn diffused(&self, scene: &Scene, interaction: &SurfaceInteraction, u: f64, v: f64, ) -> BSDF {
-        let a = CosWeightedDiffuse::new(interaction.surface.n, u, v);
-        let b = LightWeightedDiffuse::new(
-            interaction.surface.p,
-            interaction.surface.n,
-            scene
-        );
-        let mix = MixturePdf::new(0.5, &a, &b);
+        let cos_component = CosWeightedDiffuse::new(interaction.surface.n, u, v);
+        let mut components: Vec<&dyn Pdf> = vec![&cos_component];
+        let lights = scene.lights();
+        let light_components = lights.iter().map(|light| {
+            LightWeightedDiffuse::new(
+                interaction.surface.p,
+                interaction.surface.n,
+                &light
+            )
+        }).collect::<Vec<_>>();
+
+        light_components.iter().fold(&mut components, |acc, light| {
+            acc.push(light);
+            acc
+        });
+
+        let mix = MixturePdf::new(components);
         let direction = mix.gen();
         BSDF {
             direction,
@@ -158,29 +176,27 @@ trait Pdf {
     fn gen(&self) -> Vector3<f64>;
 }
 
-struct MixturePdf<'a, 'b> {
-    mix: f64,
-    a: &'a Pdf,
-    b: &'b Pdf
+struct MixturePdf<'a> {
+    components: Vec<&'a dyn Pdf>,
 }
 
-impl <'a, 'b> MixturePdf<'a, 'b> {
-    fn new(mix: f64, a: &'a Pdf, b: &'b Pdf) -> Self {
-        Self{mix, a, b}
+impl <'a> MixturePdf<'a> {
+    fn new(components: Vec<&'a dyn Pdf>) -> Self {
+        Self{components}
     }
 }
 
-impl <'a, 'b> Pdf for MixturePdf<'a, 'b> {
+impl <'a> Pdf for MixturePdf<'a> {
     fn p(&self, v: Vector3<f64>) -> f64 {
-        (1.0 - self.mix) * self.a.p(v) + self.mix * self.b.p(v)
+        let mut total = 0.0;
+        for component in self.components.iter() {
+            total += component.p(v);
+        }
+        total / self.components.len() as f64
     }
 
     fn gen(&self) -> Vector3<f64> {
-        if rand::random::<f64>() <= self.mix {
-            self.b.gen()
-        } else {
-            self.a.gen()
-        }
+        self.components.choose(&mut rand::thread_rng()).unwrap().gen()
     }
 }
 
@@ -213,18 +229,18 @@ impl Pdf for CosWeightedDiffuse {
 struct LightWeightedDiffuse<'a> {
     point: Point3<f64>,
     normal: Vector3<f64>,
-    scene: &'a Scene
+    light: &'a Sphere
 }
 
 impl <'a> LightWeightedDiffuse<'a> {
-    fn new(point: Point3<f64>, normal: Vector3<f64>, scene: &'a Scene) -> Self {
-        Self{point, normal, scene}
+    fn new(point: Point3<f64>, normal: Vector3<f64>, light: &'a Sphere) -> Self {
+        Self{point, normal, light}
     }
 }
 
 impl <'a> Pdf for LightWeightedDiffuse<'a> {
     fn p(&self, v: Vector3<f64>) -> f64 {
-        let light = self.scene.light();
+        let light = self.light;
 
         // get bounding sphere center and radius
         let center = light.center();
@@ -259,7 +275,7 @@ impl <'a> Pdf for LightWeightedDiffuse<'a> {
     }
 
     fn gen(&self) -> Vector3<f64> {
-        let light = self.scene.light();
+        let light = self.light;
 
         // get bounding sphere center and radius
         let center = light.center();
