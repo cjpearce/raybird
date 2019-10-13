@@ -9,9 +9,62 @@ pub fn load_scene(name: &str) -> Option<Scene> {
   match name {
     "box" => Some(load_box_scene()),
     "spheres" => Some(load_spheres_scene()),
+    "sphere grid" => Some(load_sphere_grid()),
     _ => None
   }
 }
+
+fn load_sphere_grid() -> Scene {
+    const INTENSITY: f64 = 800.0;
+    let bright_light = Material::new(
+        Vector3::new(0.0, 0.0, 0.0),
+        1.0,
+        1.0,
+        Vector3::new(INTENSITY, INTENSITY, INTENSITY),
+        Vector3::new(0.0, 0.0, 0.0),
+        0.0,
+        0.0
+    );
+
+    let mut objects = Vec::new();
+    for i in (0..5) {
+        for j in (0..5) {
+            objects.push(
+                Sphere::new(
+                    j + i*10,
+                    Point3::new(i as f64 - 2.0, j as f64 - 2.0, 0.0),
+                    0.4,
+                    Material::new(
+                        Vector3::new(1.0, 1.0, 1.0),
+                        1.0,
+                        0.0,
+                        Vector3::new(0.0, 0.0, 0.0),
+                        Vector3::new(1.0, 1.0, 1.0) * (j as f64 / 5.0),
+                        0.0,
+                        i as f64 / 5.0
+                    )
+                )
+            )
+        }
+    }
+
+    objects.push(
+        Sphere::new(25, Point3::new(0.0, 0.0, 20.0), 5.0, bright_light)
+    );
+
+    let camera = Camera::new(
+        Point3::new(0.0, 0.0, 13.0),
+        0.024,
+        0.055,
+        14.0,
+        1.4,
+        0.0,
+        0.0
+    );
+
+    Scene::new(objects, camera, 25)
+}
+
 
 fn load_spheres_scene() -> Scene {
   let bright_light = Material::new(
