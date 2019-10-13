@@ -3,8 +3,8 @@ use std::f64;
 
 #[derive(PartialEq)]
 enum InteractionType {
-  Diffuse,
-  Specular
+    Diffuse,
+    Specular,
 }
 
 struct BxdfSample {
@@ -34,17 +34,17 @@ struct LambertianBsdf {
 
 impl LambertianBsdf {
     fn new(diffuse: Vector3<f64>) -> Self {
-        Self{ diffuse }
+        Self { diffuse }
     }
 }
 
 impl Bxdf for LambertianBsdf {
     fn matches_type(&self, interaction_type: InteractionType) -> bool {
-      interaction_type == self.interaction_type()
+        interaction_type == self.interaction_type()
     }
 
     fn interaction_type(&self) -> InteractionType {
-      InteractionType::Diffuse
+        InteractionType::Diffuse
     }
 
     fn f(&self, _wo: Vector3<f64>, _wi: Vector3<f64>) -> Vector3<f64> {
@@ -64,7 +64,7 @@ impl Bxdf for LambertianBsdf {
         if wo.z < 0.0 {
             wi.z *= -1.0
         }
-        
+
         BxdfSample {
             f: self.f(wo, wi),
             wi,

@@ -8,3 +8,4 @@ pub mod scene_loader;
 pub mod sensor;
 mod sphere;
 pub mod tracer;
+mod transform;
